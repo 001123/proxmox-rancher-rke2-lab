@@ -2,7 +2,7 @@
 
 proxmox_node = "pve"
 template_id  = 9000
-datastore_id = "vg1-thin"
+datastore_id = "rancher-data-thin"
 bridge       = "vmbr0"
 
 # Optional: if unset, the provider reads PROXMOX_VE_ENDPOINT / PROXMOX_VE_API_TOKEN.

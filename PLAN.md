@@ -18,8 +18,8 @@ IPv4 lấy từ qemu-guest-agent sau DHCP — không gán static trong Terraform
 
 ## Đã làm
 
-- [x] [`scripts/create-ubuntu-24.04-template.sh`](scripts/create-ubuntu-24.04-template.sh) — cloud image, bake guest-agent bằng one-shot cloud-init (không `virt-customize` / libguestfs: conflict `pve-qemu-kvm`)
-- [x] [`scripts/destroy-clones-from-template.sh`](scripts/destroy-clones-from-template.sh) — xóa clone trên node Proxmox, giữ template
+- [x] [`scripts/proxmox/create-ubuntu-24.04-template.sh`](scripts/proxmox/create-ubuntu-24.04-template.sh) — cloud image, bake guest-agent bằng one-shot cloud-init (không `virt-customize` / libguestfs: conflict `pve-qemu-kvm`)
+- [x] [`scripts/proxmox/destroy-clones-from-template.sh`](scripts/proxmox/destroy-clones-from-template.sh) — xóa clone trên node Proxmox, giữ template
 - [x] Module `proxmox_vm`: `proxmox_virtual_environment_vm` clone + cloud-init DHCP + agent + MAC
 - [x] Root Terraform: 4 VM, k3s + Helm Rancher, `rancher2_bootstrap`, `rancher2_cluster_v2`, SSH join CP/workers
 - [x] Ghim MAC; lọc IPv4 guest-agent (bỏ loopback / CNI `10.42`/`10.43`)
@@ -62,18 +62,18 @@ Sizing mặc định ~20 GB RAM: mgmt 4 vCPU / 8 GB / 40 GB; mỗi node RKE2 2 v
 
 1. Clone 4 VM từ template; cloud-init native (user `ubuntu`, SSH key, DHCP `vmbr0`). Ghim MAC nếu muốn reservation DHCP ngoài Terraform.
 2. Chờ qemu-guest-agent trả IPv4 (bỏ `127.0.0.1`, link-local, CNI).
-3. SSH `rancher-mgmt`: cài k3s pin version (giữ Traefik, `INSTALL_K3S_SKIP_START` rồi start qua systemd để không cắt remote-exec), Helm, cert-manager, chart Rancher `hostname=rancher.<ip>.sslip.io`, `replicas=1`.
+3. SSH `rancher-mgmt`: cài k3s pin version (giữ Traefik, `INSTALL_K3S_SKIP_START` rồi start qua systemd để không cắt remote-exec), Helm 4, cert-manager, chart Rancher `hostname=rancher.<ip>.sslip.io`, `replicas=1`.
 4. Healthcheck `/ping` bằng `--resolve` (không phụ thuộc DNS công cộng trên guest). Chờ cluster `local` Connected + `rancher-webhook`, rồi giữ condition `Updated=True`.
 5. `rancher2_bootstrap` → token admin.
 6. `rancher2_cluster_v2` (`kubernetes_version` = variable, phải có trong UI Rancher).
 7. SSH 3 node RKE2: `insecure_node_command` + `CATTLE_AGENT_STRICT_VERIFY=false`. Control-plane ghi thêm CoreDNS `hosts` cho hostname Rancher.
 
-`rancher2` cần URL sau khi biết IPv4 DHCP → apply lần đầu thường 2 bước (target module VM, rồi apply full). Xem README.
+`rancher2` cần URL sau khi biết IPv4 DHCP → apply lần đầu thường 2 bước (target module VM, rồi apply full): [`scripts/local/install.sh`](scripts/local/install.sh) hoặc xem README.
 
 ## Cấu trúc repo
 
-- [`scripts/create-ubuntu-24.04-template.sh`](scripts/create-ubuntu-24.04-template.sh) — chạy **trên node Proxmox**, một lần (TF không tạo template).
-- [`scripts/destroy-clones-from-template.sh`](scripts/destroy-clones-from-template.sh) — dọn clone trên PVE khi state/VM lệch.
+- [`scripts/proxmox/`](scripts/proxmox/) — chạy **trên node Proxmox**: tạo template (một lần; TF không tạo) và dọn clone khi state/VM lệch.
+- [`scripts/local/install.sh`](scripts/local/install.sh) — apply 2 bước trên laptop (lần đầu, trước khi `rancher2` có URL).
 - [`scripts/install-k3s-rancher.sh`](scripts/install-k3s-rancher.sh) / [`scripts/join-rke2-node.sh`](scripts/join-rke2-node.sh) — remote-exec, idempotent.
 - [`modules/proxmox_vm`](modules/proxmox_vm) — clone, CPU/RAM/disk, agent, cloud-init, tags, MAC.
 - Root: [`versions.tf`](versions.tf), [`providers.tf`](providers.tf), [`variables.tf`](variables.tf), [`locals.tf`](locals.tf), [`vms.tf`](vms.tf), [`rancher.tf`](rancher.tf), [`cluster.tf`](cluster.tf), [`outputs.tf`](outputs.tf), [`terraform.tfvars.example`](terraform.tfvars.example).

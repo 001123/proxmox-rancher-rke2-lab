@@ -8,9 +8,9 @@
 #   3. NAME_REGEX (default rancher-mgmt / rke2-cp-* / rke2-wk-*)
 #
 # Usage (on the Proxmox node):
-#   sudo ./scripts/destroy-clones-from-template.sh
-#   sudo DRY_RUN=1 ./scripts/destroy-clones-from-template.sh
-#   sudo FORCE=1 TEMPLATE_ID=9000 ./scripts/destroy-clones-from-template.sh
+#   sudo ./scripts/proxmox/destroy-clones-from-template.sh
+#   sudo DRY_RUN=1 ./scripts/proxmox/destroy-clones-from-template.sh
+#   sudo FORCE=1 TEMPLATE_ID=9000 ./scripts/proxmox/destroy-clones-from-template.sh
 #
 # After this, from the laptop: terraform destroy so state is not left pointing
 # at missing VMs. Then rebuild the template if machine-id was baked in, apply.
@@ -181,5 +181,5 @@ echo "Done. Template ${TEMPLATE_ID} is unchanged."
 echo "From the laptop, sync Terraform state (VMs are already gone):"
 echo "  terraform destroy"
 echo "Then rebuild the template if needed and apply:"
-echo "  sudo VMID=${TEMPLATE_ID} STORAGE=vg1-thin BRIDGE=vmbr0 ./scripts/create-ubuntu-24.04-template.sh"
+echo "  sudo VMID=${TEMPLATE_ID} STORAGE=rancher-data-thin BRIDGE=vmbr0 ./scripts/proxmox/create-ubuntu-24.04-template.sh"
 echo "  terraform apply"

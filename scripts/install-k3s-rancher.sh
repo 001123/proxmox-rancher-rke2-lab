@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent: k3s (Traefik kept) + Helm + cert-manager + Rancher on rancher-mgmt.
+# Idempotent: k3s (Traefik kept) + Helm 4 + cert-manager + Rancher on rancher-mgmt.
 # Usage: sudo /tmp/install-k3s-rancher.sh /tmp/rancher-install.json
 set -euo pipefail
 
@@ -35,7 +35,7 @@ PY
 
 : "${RANCHER_HOSTNAME:?RANCHER_HOSTNAME is required}"
 : "${BOOTSTRAP_PASSWORD:?BOOTSTRAP_PASSWORD is required}"
-CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.12.1}"
+CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.21.1}"
 
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 export PATH="/usr/local/bin:/usr/bin:/bin:${PATH}"
@@ -105,9 +105,10 @@ if [[ "$ok" -ne 1 ]]; then
 fi
 kubectl wait --for=condition=Ready nodes --all --timeout=5m
 
-if ! command -v helm >/dev/null 2>&1; then
-  echo "==> installing Helm"
-  curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+if ! command -v helm >/dev/null 2>&1 \
+  || ! helm version --short 2>/dev/null | grep -q '^v4'; then
+  echo "==> installing Helm 4"
+  curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4 | bash
 fi
 
 helm repo add jetstack https://charts.jetstack.io --force-update >/dev/null

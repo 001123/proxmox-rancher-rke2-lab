@@ -29,7 +29,7 @@ variable "proxmox_node" {
 
 variable "template_id" {
   type        = number
-  description = "VMID of the Ubuntu 24.04 cloud-init template (created by scripts/create-ubuntu-24.04-template.sh)."
+  description = "VMID of the Ubuntu 24.04 cloud-init template (created by scripts/proxmox/create-ubuntu-24.04-template.sh)."
 }
 
 variable "datastore_id" {
