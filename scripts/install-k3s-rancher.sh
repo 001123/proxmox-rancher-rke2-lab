@@ -35,7 +35,7 @@ PY
 
 : "${RANCHER_HOSTNAME:?RANCHER_HOSTNAME is required}"
 : "${BOOTSTRAP_PASSWORD:?BOOTSTRAP_PASSWORD is required}"
-CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.17.1}"
+CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.12.1}"
 
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 export PATH="/usr/local/bin:/usr/bin:/bin:${PATH}"

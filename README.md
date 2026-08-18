@@ -178,7 +178,7 @@ Dùng resource `proxmox_virtual_environment_vm` với block `clone` + `initializ
 Việc lab cốt lõi (VM + Rancher + join RKE2) đã xong. Phần dưới là hướng mở rộng, chưa làm.
 
 - [ ] Pin `rancher_chart_version` trong `terraform.tfvars` (hiện để trống = latest) để rebuild tái lập được
-- [ ] Đưa version cert-manager ra Terraform variable (đang hardcode `v1.17.1` trong script cài)
+- [ ] Đưa version cert-manager ra Terraform variable (đang hardcode `v1.12.1` trong script cài)
 - [ ] Map DHCP reservation theo MAC trên router/DHCP server (lease hiện lấy từ guest-agent; chưa reservation thì IP có thể đổi)
 - [ ] DNS nội bộ (Pi-hole / Unbound / record trên router) thay sslip.io + `/etc/hosts` + CoreDNS `hosts`
 - [ ] TLS thật (Let's Encrypt hoặc CA lab) — bỏ `--insecure` / `CATTLE_AGENT_STRICT_VERIFY=false`
