@@ -134,6 +134,33 @@ terraform apply -auto-approve
 
 Lần sau (state đã có IP) thường `terraform apply` một lần là đủ.
 
+**Apply complete chưa phải cluster Active.** Terraform chỉ clone VM, cài Rancher, rồi SSH chạy `insecure_node_command` (bật `rancher-system-agent`). RKE2, Calico, `cattle-cluster-agent`, và worker join chạy **sau đó**, vài phút. UI Rancher lúc này là **Updating**; `kubectl` qua kubeconfig Terraform (proxy Rancher) trả `ClusterUnavailable 503`; cột CPU / Memory / Pods là `--`.
+
+Thứ tự sau `Apply complete!`:
+
+1. Control-plane unpack RKE2, start `rke2-server` (etcd + apiserver). UI: *Waiting for Cluster control plane to be initialized, waiting for cluster agent to connect*.
+2. Calico + CoreDNS lên trên CP. Chart khác (metrics-server, Traefik, …) **Pending**: node CP có taint `control-plane` / `etcd`, chưa có worker Ready.
+3. `cattle-cluster-agent` resolve hostname Rancher (CoreDNS `hosts`) rồi nối Rancher → condition `Connected=True`.
+4. Rancher gửi machine plan xuống worker. `rancher-system-agent` cài `rke2-agent`. Worker xuất hiện **NotReady**; Rancher: *configuring worker node(s)* / *waiting for probes: calico, kubelet*.
+5. Calico `install-cni` xong trên worker → cả 3 node **Ready**. Helm chart còn Pending schedule được. Cluster `Ready` + `Updated` → UI **Active**. `kubectl get nodes` qua kubeconfig Rancher mới thành công.
+
+```mermaid
+sequenceDiagram
+  participant TF as Terraform
+  participant R as Rancher (mgmt)
+  participant CP as rke2-cp-01
+  participant W as workers
+  TF->>R: tạo cluster lab-rke2
+  TF->>CP: insecure_node_command --etcd --controlplane
+  TF->>W: insecure_node_command --worker
+  Note over TF: Apply complete — UI vẫn Updating
+  CP->>CP: rke2-server + Calico + CoreDNS
+  CP->>R: cattle-cluster-agent connect
+  R->>W: machine plan → rke2-agent
+  W->>W: Calico CNI, node Ready
+  Note over R,W: UI Active, kubectl qua proxy OK
+```
+
 ## Outputs
 
 - `rancher_url` — UI (`https://rancher.<ip>.sslip.io`)
@@ -146,6 +173,8 @@ terraform output -raw rke2_kube_config > kubeconfig-rke2.yaml
 export KUBECONFIG=$PWD/kubeconfig-rke2.yaml
 kubectl get nodes
 ```
+
+Nếu `503 ClusterUnavailable` / UI **Updating**: đợi bootstrap (mục trên), không phải apply lỗi.
 
 Đăng nhập Rancher bằng user `admin` và `rancher_bootstrap_password`.
 
@@ -185,7 +214,7 @@ Dùng resource `proxmox_virtual_environment_vm` với block `clone` + `initializ
 - Template **phải** xóa `machine-id` trước khi `qm template`. Nếu không, mọi clone dùng chung DUID DHCP → cùng một IPv4, Terraform SSH nhầm VM (Rancher cài lên `rke2-cp-01`). Rebuild template rồi `terraform destroy` / `apply`. Ghim MAC rồi map reservation DHCP cũng tránh lệch lease.
 - Token format: `user@realm!tokenid=uuid`.
 - Mgmt 8 GB RAM; 4 GB dễ OOM khi cài Rancher.
-- sslip.io từ **laptop** cần DNS cho phép RFC1918 (không chặn DNS rebind). Healthcheck trên VM ghi `/etc/hosts` vì guest thường resolve qua IPv6 và không có bản ghi A. Pod trong RKE2 (`cattle-cluster-agent`) dùng CoreDNS, không đọc `/etc/hosts` của node — script join ghi thêm `HelmChartConfig` `rke2-coredns` (plugin `hosts`) trên control-plane. Không có bước này cluster đứng **Updating** với `waiting for probes: calico` / agent crash `Could not resolve host: rancher.<ip>.sslip.io`.
+- sslip.io từ **laptop** cần DNS cho phép RFC1918 (không chặn DNS rebind). Healthcheck trên VM ghi `/etc/hosts` vì guest thường resolve qua IPv6 và không có bản ghi A. Pod trong RKE2 (`cattle-cluster-agent`) dùng CoreDNS, không đọc `/etc/hosts` của node — script join ghi thêm `HelmChartConfig` `rke2-coredns` (plugin `hosts`) trên control-plane. Không có bước này cluster **kẹt** Updating với `waiting for probes: calico` / agent crash `Could not resolve host: rancher.<ip>.sslip.io`. Updating **vài phút ngay sau apply** là bình thường (bootstrap, mục Terraform).
 - Join dùng `insecure_node_command` + `CATTLE_AGENT_STRICT_VERIFY=false` vì cert Rancher tự ký.
 - Pin `k3s_version` cho khớp matrix Rancher. Latest k3s đôi khi quá mới. Rancher 2.15 hỗ trợ Kubernetes 1.34–1.36; `rancher-latest` không pin sẽ kéo 2.15. Script cài đặt dùng Helm 4.
 - `rancher2_bootstrap` chờ condition `Updated` trên cluster `local` (timeout mặc định 120s; provider lab set `15m`). `/ping` lên sớm hơn, và Rancher 2.15 **không** set `Updated` cho local k3s — script cài đặt chờ Connected + webhook rồi giữ condition đó để provider không timeout.
