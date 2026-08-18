@@ -9,10 +9,10 @@ Hướng dẫn chạy / destroy: [`README.md`](README.md). Việc còn lại n�
 | Thành phần | Hiện trạng |
 | --- | --- |
 | Template Ubuntu 24.04 (`VMID` 9000) | Có `qemu-guest-agent`, xóa `machine-id`, `dhcp-identifier: mac` |
-| 4 VM (`rancher-mgmt`, `rke2-cp-01`, `rke2-wk-01/02`) | Clone full, DHCP, MAC ghim trong `terraform.tfvars` |
-| Rancher | Helm `rancher-latest` trên k3s (Traefik), `replicas=1`, hostname sslip.io |
-| Cluster `lab-rke2` | `rancher2_cluster_v2` custom; join bằng `insecure_node_command` |
-| State | Có output URL / IP / kubeconfig sau khi cluster Connected |
+| 4 VM (`rancher-mgmt`, `rke2-cp-01`, `rke2-wk-01/02`) | Clone full, DHCP, MAC ghim; tất cả 8 GB RAM |
+| Rancher | Helm `rancher-latest` trên k3s (Traefik), `replicas=1`, hostname sslip.io (`terraform output rancher_url`) |
+| Cluster `lab-rke2` | **Active**, 3 node Ready; Calico + Traefik; chưa có StorageClass / LoadBalancer |
+| State | Có output URL / IP / kubeconfig (cluster Connected) |
 
 IPv4 lấy từ qemu-guest-agent sau DHCP — không gán static trong Terraform (netplan bake `99-dhcp-mac.yaml` ghi đè ipconfig static của Proxmox).
 
@@ -51,7 +51,7 @@ flowchart LR
 
 Downstream **không** tự cài RKE2. Rancher tạo cluster custom; Terraform SSH vào từng node, chạy `insecure_node_command` (`--etcd --controlplane` / `--worker`) vì cert Rancher tự ký.
 
-Sizing mặc định ~20 GB RAM: mgmt 4 vCPU / 8 GB / 40 GB; mỗi node RKE2 2 vCPU / 4 GB / 40 GB. `worker_count` là variable.
+Sizing mặc định ~32 GB RAM: mgmt 4 vCPU / 8 GB / 40 GB; CP 2 vCPU / 8 GB / 40 GB; mỗi worker 2 vCPU / 8 GB / 40 GB (`rke2_worker_memory_mb` ≥ 8192). `worker_count` là variable.
 
 ## Providers
 

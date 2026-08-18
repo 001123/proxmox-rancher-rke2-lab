@@ -133,8 +133,19 @@ variable "rke2_vcpus" {
 
 variable "rke2_memory_mb" {
   type        = number
-  default     = 4096
-  description = "RAM in MiB for each RKE2 node."
+  default     = 8192
+  description = "RAM in MiB for the RKE2 control-plane node. 4 GiB is the RKE2 minimum; 8 GiB leaves headroom so a single CP does not OOM."
+}
+
+variable "rke2_worker_memory_mb" {
+  type        = number
+  default     = 8192
+  description = "RAM in MiB for each RKE2 worker. Minimum 8192 (web + Postgres + Redis)."
+
+  validation {
+    condition     = var.rke2_worker_memory_mb >= 8192
+    error_message = "rke2_worker_memory_mb must be at least 8192 (8 GiB)."
+  }
 }
 
 variable "rke2_disk_gb" {

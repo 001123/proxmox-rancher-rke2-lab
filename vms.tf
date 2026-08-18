@@ -62,7 +62,7 @@ module "rke2_workers" {
   bridge         = var.bridge
   cpu_cores      = var.rke2_vcpus
   cpu_type       = var.cpu_type
-  memory_mb      = var.rke2_memory_mb
+  memory_mb      = var.rke2_worker_memory_mb
   disk_size_gb   = var.rke2_disk_gb
   ssh_username   = var.ssh_user
   ssh_public_key = local.ssh_public_key

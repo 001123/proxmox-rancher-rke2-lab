@@ -8,19 +8,21 @@ Thiết kế / quyết định kỹ thuật: [`PLAN.md`](PLAN.md).
 
 ## Lab đang chạy
 
-Stack đã apply thành công (xem `terraform output` — IPv4 là lease DHCP, đổi nếu reservation chưa map MAC):
+Snapshot sau apply + bootstrap. IPv4 / URL / cluster id lấy từ `terraform output` (lease DHCP — đổi nếu chưa map reservation theo MAC).
 
-| VM | Vai trò | MAC (ghim) |
-| --- | --- | --- |
-| `rancher-mgmt` | k3s + Helm Rancher | `BC:24:11:00:00:10` |
-| `rke2-cp-01` | etcd + control-plane | `BC:24:11:00:00:11` |
-| `rke2-wk-01` | worker | `BC:24:11:00:00:12` |
-| `rke2-wk-02` | worker | `BC:24:11:00:00:13` |
+| VM | Vai trò | MAC (ghim) | Size |
+| --- | --- | --- | --- |
+| `rancher-mgmt` | k3s + Helm Rancher | `BC:24:11:00:00:10` | 4 vCPU / 8 GB / 40 GB |
+| `rke2-cp-01` | etcd + control-plane | `BC:24:11:00:00:11` | 2 vCPU / 8 GB / 40 GB |
+| `rke2-wk-01` | worker | `BC:24:11:00:00:12` | 2 vCPU / 8 GB / 40 GB |
+| `rke2-wk-02` | worker | `BC:24:11:00:00:13` | 2 vCPU / 8 GB / 40 GB |
 
-- Cluster Rancher: `lab-rke2`
-- URL: `https://rancher.<mgmt_ip>.sslip.io` (`terraform output rancher_url`)
-- Pin hiện tại: k3s `v1.36.3+k3s1`, RKE2 `v1.36.3+rke2r1`, Rancher chart `rancher-latest` (chưa pin version)
-- Datastore lab: `rancher-data-thin`, bridge `vmbr0`, node `pve`
+- Cluster Rancher: `lab-rke2` — **Active**, 3 node Ready (`v1.36.3+rke2r1`)
+- UI: `terraform output rancher_url` (user `admin` + `rancher_bootstrap_password`)
+- Pin: k3s `v1.36.3+k3s1`, RKE2 `v1.36.3+rke2r1`, Rancher chart `rancher-latest` (chưa pin version)
+- Datastore: `rancher-data-thin`, bridge `vmbr0`, node `pve`
+- Trên `lab-rke2` đã có: Calico, CoreDNS, metrics-server, **Traefik** (IngressClass mặc định; DaemonSet trên worker, hostPort 80/443). **Chưa có** StorageClass, Service `LoadBalancer`, hay app workload.
+- Idle (`kubectl top nodes`): CP ~4 GiB RAM (~50%); mỗi worker ~0.5 GiB — còn chỗ cho web + Postgres + Redis.
 
 ## Kiến trúc
 
@@ -34,7 +36,7 @@ terraform
 
 Downstream **không** tự cài RKE2. Rancher tạo cluster custom; Terraform SSH vào từng node và chạy `insecure_node_command`.
 
-Tổng RAM mặc định ~20 GB: mgmt 4 vCPU / 8 GB / 40 GB; mỗi node RKE2 2 vCPU / 4 GB / 40 GB.
+Tổng RAM mặc định ~32 GB: mgmt 4 vCPU / 8 GB / 40 GB; CP 2 vCPU / 8 GB / 40 GB; mỗi worker 2 vCPU / **8 GB** / 40 GB (`rke2_worker_memory_mb` ≥ 8192).
 
 ## Yêu cầu
 
@@ -134,7 +136,7 @@ terraform apply -auto-approve
 
 Lần sau (state đã có IP) thường `terraform apply` một lần là đủ.
 
-**Apply complete chưa phải cluster Active.** Terraform chỉ clone VM, cài Rancher, rồi SSH chạy `insecure_node_command` (bật `rancher-system-agent`). RKE2, Calico, `cattle-cluster-agent`, và worker join chạy **sau đó**, vài phút. UI Rancher lúc này là **Updating**; `kubectl` qua kubeconfig Terraform (proxy Rancher) trả `ClusterUnavailable 503`; cột CPU / Memory / Pods là `--`.
+**Apply complete chưa phải cluster Active.** Terraform chỉ clone VM, cài Rancher, rồi SSH chạy `insecure_node_command` (bật `rancher-system-agent`). RKE2, Calico, `cattle-cluster-agent`, và worker join chạy **sau đó**, vài phút. UI Rancher lúc này là **Updating**; `kubectl` qua kubeconfig Terraform (proxy Rancher) trả `ClusterUnavailable 503`; cột CPU / Memory / Pods là `--`. Lab hiện tại đã qua bước này (Active — xem bảng trên).
 
 Thứ tự sau `Apply complete!`:
 
@@ -163,10 +165,10 @@ sequenceDiagram
 
 ## Outputs
 
-- `rancher_url` — UI (`https://rancher.<ip>.sslip.io`)
+- `rancher_url` — UI (`https://rancher.<mgmt_ip>.sslip.io`)
 - IP + MAC 4 VM
 - `cluster_name` / `cluster_id`
-- `rke2_kube_config` (sensitive; có thể trống đến khi cluster **Active** / Connected)
+- `rke2_kube_config` (sensitive; trống đến khi cluster **Active** / Connected — lab hiện tại đã có)
 
 ```bash
 terraform output -raw rke2_kube_config > kubeconfig-rke2.yaml
@@ -220,22 +222,53 @@ Dùng resource `proxmox_virtual_environment_vm` với block `clone` + `initializ
 - `rancher2_bootstrap` chờ condition `Updated` trên cluster `local` (timeout mặc định 120s; provider lab set `15m`). `/ping` lên sớm hơn, và Rancher 2.15 **không** set `Updated` cho local k3s — script cài đặt chờ Connected + webhook rồi giữ condition đó để provider không timeout.
 - Không gán IPv4 tĩnh trong Terraform: file netplan `99-dhcp-mac.yaml` trên template ghi đè ipconfig static của Proxmox.
 
-## TODO
+## TODO — cluster đủ chạy web app
 
-Việc lab cốt lõi (VM + Rancher + join RKE2) đã xong. Phần dưới là hướng mở rộng, chưa làm.
+Lab cốt lõi (VM + Rancher + RKE2 Active) đã xong. RKE2 đã có Calico, CoreDNS, metrics-server, và **Traefik** (packaged; không phải ingress-nginx). App sẽ chạy trên `lab-rke2` gồm **web + Postgres + Redis** — còn thiếu StorageClass (PVC cho DB/cache) và một VIP/hostname ổn định để vào từ LAN.
 
-- [ ] Pin `rancher_chart_version` trong `terraform.tfvars` (hiện để trống = latest) để rebuild tái lập được
-- [ ] Đưa version cert-manager ra Terraform variable (đang hardcode `v1.21.1` trong script cài)
-- [ ] Map DHCP reservation theo MAC trên router/DHCP server (lease hiện lấy từ guest-agent; chưa reservation thì IP có thể đổi)
-- [ ] DNS nội bộ (Pi-hole / Unbound / record trên router) thay sslip.io + `/etc/hosts` + CoreDNS `hosts`
-- [ ] TLS thật (Let's Encrypt hoặc CA lab) — bỏ `--insecure` / `CATTLE_AGENT_STRICT_VERIFY=false`
-- [ ] Local-path (hoặc storage tương đương) trên cluster RKE2
-- [ ] MetalLB hoặc kube-vip cho Service `LoadBalancer`
-- [ ] Demo workload + Ingress trên RKE2
-- [ ] HA RKE2: 3 control-plane (hiện 1 CP)
-- [ ] HA Rancher (hiện 1 replica trên k3s single-node)
-- [ ] VLAN / tách mạng mgmt và workload
-- [ ] Bỏ workaround `rancher-ensure-updated-condition` khi `rancher2` hỗ trợ cluster local Rancher 2.15
+Không làm ở lab này: HA Rancher / 3 control-plane, VLAN, pin chart Rancher, TLS thật cho Rancher, DNS nội bộ thay sslip.io.
+
+### 1. IP không đổi
+
+- [ ] Map DHCP reservation theo MAC trên router (`BC:24:11:00:00:10`–`13`). Lease đổi → `rancher_url`, kubeconfig, và VIP MetalLB gãy.
+
+### 2. Storage (PVC)
+
+RKE2 **không** có local-path như k3s. Postgres **bắt buộc** PVC; Redis nên có PVC nếu giữ AOF/RDB (cache thuần có thể ephemeral).
+
+- [ ] Cài [local-path-provisioner](https://github.com/rancher/local-path-provisioner) trên `lab-rke2`, set default StorageClass
+- [ ] PVC `postgres-data` + `redis-data` Bound trên worker (volume nằm disk local của node — không migrate khi pod đổi node; pin Postgres/Redis bằng StatefulSet hoặc `nodeSelector`)
+- [ ] Disk 40 GB hiện tại: tăng `rke2_disk_gb` nếu Postgres lớn
+- Không dùng Longhorn với sizing worker 2 vCPU / 8 GB (vẫn chật nếu thêm replica)
+
+### 3. Vào app từ LAN
+
+Traefik đã Ready trên hai worker (`rke2-traefik` DaemonSet, hostPort 80/443). Service vẫn là ClusterIP — chưa có VIP.
+
+- [x] Traefik Ready (`kube-system`, IngressClass `traefik`). Tạm thời trỏ hostname tới IP worker (`terraform output rke2_worker_ips`, hostPort 80/443; không lên CP vì taint)
+- [ ] Cài MetalLB (L2) hoặc kube-vip: pool 1 IP trống cùng subnet `vmbr0`, gán Service `LoadBalancer` của Traefik — một VIP, không phụ thuộc worker nào sống
+- [ ] Hostname app: `app.<vip>.sslip.io` hoặc record trên router. Laptop resolve được hostname đó
+
+### 4. TLS cho app (không phải Rancher)
+
+- [ ] cert-manager trên cluster RKE2 (khác bản trên `rancher-mgmt`)
+- [ ] ClusterIssuer self-signed (lab) hoặc HTTP-01 nếu hostname public. Ingress `tls:` trỏ Certificate
+
+### 5. Kiểm chứng bằng app (web + Postgres + Redis)
+
+- [ ] Namespace app (ví dụ `app`)
+- [ ] Postgres (StatefulSet + Service + PVC) — `pg_isready`, data còn sau restart pod
+- [ ] Redis (Deployment/StatefulSet + Service; PVC nếu persist) — `PING`/`PONG`
+- [ ] Web Deployment + Service; env trỏ Postgres + Redis trong cluster (`*.svc`)
+- [ ] Ingress host `app.<vip>.sslip.io` → Service web
+- [ ] Từ laptop: `curl -k https://app.<vip>.sslip.io` trả nội dung app
+
+### 6. Sizing worker (min 8 GB)
+
+Worker mặc định `rke2_worker_memory_mb = 8192` (validation ≥ 8 GiB) để chạy web + Postgres + Redis cùng DaemonSet Calico / Traefik. Control-plane cùng 8 GB (`rke2_memory_mb`) — 4 GB là min RKE2, lab dùng 8 GB vì 1 CP OOM là cả cụm chết. VM đang chạy đã là 8 GB.
+
+- [ ] Limit memory cho Postgres và Redis; không để request vượt quá node
+- [ ] Tăng `rke2_worker_memory_mb` (hoặc `rke2_vcpus`) nếu vẫn Evicted / OOMKilled
 
 ## Việc không làm
 
