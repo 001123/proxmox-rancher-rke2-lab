@@ -1,0 +1,37 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+
+proxmox_node = "pve"
+template_id  = 9000
+datastore_id = "vg1-thin"
+bridge       = "vmbr0"
+
+# Optional: if unset, the provider reads PROXMOX_VE_ENDPOINT / PROXMOX_VE_API_TOKEN.
+# proxmox_endpoint  = "https://192.168.100.252:8006/"
+# proxmox_api_token = "root@pam!terraform=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+proxmox_insecure = true
+
+ssh_public_key_path  = "~/.ssh/id_ed25519.pub"
+ssh_private_key_path = "~/.ssh/id_ed25519"
+
+rancher_bootstrap_password = "ChangeMe_LabAdmin1"
+# rancher_chart_version    = "2.12.3"
+k3s_version                = "v1.36.3+k3s1"
+rke2_kubernetes_version    = "v1.36.3+rke2r1"
+cluster_name               = "lab-rke2"
+worker_count               = 2
+
+# Pin MACs so you can map DHCP reservations yourself. Omit = Proxmox generates them.
+# mgmt_mac_address    = "BC:24:11:00:00:10"
+# rke2_cp_mac_address = "BC:24:11:00:00:11"
+# rke2_worker_mac_addresses = [
+#   "BC:24:11:00:00:12",
+#   "BC:24:11:00:00:13",
+# ]
+
+# mgmt_vcpus     = 4
+# mgmt_memory_mb = 8192
+# mgmt_disk_gb   = 40
+# rke2_vcpus     = 2
+# rke2_memory_mb = 4096
+# rke2_disk_gb   = 40
+# cpu_type       = "x86-64-v2-AES"
